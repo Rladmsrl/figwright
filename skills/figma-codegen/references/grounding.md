@@ -198,6 +198,16 @@ the obvious ones. These are ordered by how easily they're silently dropped.
 - **Blend mode.** A node may carry `blendMode` (`MULTIPLY` / `SCREEN` / `OVERLAY` / …) — map it to
   `mix-blend-mode` (on the element) or `background-blend-mode` (a fill over an image). An overlay
   swatch blended onto a photo reads as the wrong flat colour if you drop it.
+  A **paint** in `fills` / `strokes` may carry a `blendMode` of its own, separate from the node's: a
+  layer left at pass-through can hold an image fill set to `LIGHTEN`, and only the paint says so.
+  A node's only fill set that way renders as that mode on the element; between stacked fills it is
+  `background-blend-mode`. Drawn as a plain image, an illustration meant to lighten its panel puts
+  its dark surround over it instead.
+- **Which picture.** An `IMAGE` fill carries `imageHash`, the picture's identity and the name
+  `save_image_fills` gives its file. Layers lying on one another with different hashes hold
+  different pictures — the one that shows is the one on top, so take the asset from that layer, not
+  from one it covers. `filters` holds an adjusted image's non-zero adjustments (each −1…1) beside
+  `filtersApplied`.
 - **Masks.** A node with `isMask: true` clips its later siblings to its own shape (`maskType`
   `ALPHA` / `LUMINANCE` / `GEOMETRY`). **Don't render the mask layer as ordinary content** — realise
   it as the container's `overflow-hidden` + radius, a `clip-path`, or an SVG mask on the masked

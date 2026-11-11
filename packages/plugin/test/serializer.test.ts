@@ -527,6 +527,95 @@ describe('serializeFlat', () => {
     expect(untouched.fills?.[0]).not.toHaveProperty('filtersApplied');
   });
 
+  it('carries the adjustments themselves beside the flag, non-zero ones only', () => {
+    const graded = serializeFlatSync(
+      fake({
+        fills: [
+          {
+            type: 'IMAGE',
+            visible: true,
+            opacity: 1,
+            scaleMode: 'FILL',
+            filters: { exposure: 0.3, contrast: 0, saturation: -1, tint: 0.123456 },
+          },
+        ],
+      }),
+    );
+    expect(graded.fills?.[0]).toMatchObject({
+      filtersApplied: true,
+      filters: { exposure: 0.3, saturation: -1, tint: 0.1235 },
+    });
+
+    const untouched = serializeFlatSync(
+      fake({
+        fills: [
+          { type: 'IMAGE', visible: true, opacity: 1, scaleMode: 'FILL', filters: { exposure: 0 } },
+        ],
+      }),
+    );
+    expect(untouched.fills?.[0]).not.toHaveProperty('filters');
+  });
+
+  it('says which picture an image or video paint shows', () => {
+    const out = serializeFlatSync(
+      fake({
+        fills: [
+          { type: 'IMAGE', visible: true, opacity: 1, scaleMode: 'FILL', imageHash: 'aaa111' },
+          { type: 'VIDEO', visible: true, opacity: 1, scaleMode: 'FILL', videoHash: 'bbb222' },
+          // An image paint created without a picture reports null: nothing to name.
+          { type: 'IMAGE', visible: true, opacity: 1, scaleMode: 'FILL', imageHash: null },
+        ],
+      }),
+    );
+    expect(out.fills?.[0]).toMatchObject({ imageHash: 'aaa111' });
+    expect(out.fills?.[1]).toMatchObject({ videoHash: 'bbb222' });
+    expect(out.fills?.[2]).not.toHaveProperty('imageHash');
+  });
+
+  it('carries a paint’s own blend mode on every paint type, and nothing for NORMAL', () => {
+    // A layer left at pass-through whose fill is set to LIGHTEN: only the paint says so.
+    const out = serializeFlatSync(
+      fake({
+        blendMode: 'PASS_THROUGH',
+        fills: [
+          { type: 'IMAGE', visible: true, opacity: 1, scaleMode: 'FILL', blendMode: 'LIGHTEN' },
+          {
+            type: 'SOLID',
+            visible: true,
+            opacity: 0.2,
+            color: { r: 0, g: 0, b: 0 },
+            blendMode: 'MULTIPLY',
+          },
+          {
+            type: 'GRADIENT_LINEAR',
+            visible: true,
+            opacity: 1,
+            blendMode: 'SCREEN',
+            gradientStops: [],
+            gradientTransform: [
+              [1, 0, 0],
+              [0, 1, 0],
+            ],
+          },
+          {
+            type: 'SOLID',
+            visible: true,
+            opacity: 1,
+            color: { r: 1, g: 1, b: 1 },
+            blendMode: 'NORMAL',
+          },
+        ],
+      }),
+    );
+    expect(out.blendMode).toBeUndefined();
+    expect(out.fills?.map(f => (f as { blendMode?: string }).blendMode)).toEqual([
+      'LIGHTEN',
+      'MULTIPLY',
+      'SCREEN',
+      undefined,
+    ]);
+  });
+
   it('embeds Dev Mode annotations and the sticky/aspect dimensions only when meaningful', () => {
     const out = serializeFlatSync(
       fake({

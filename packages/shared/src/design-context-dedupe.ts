@@ -11,6 +11,7 @@ import type {
   SerializedEffect,
   SerializedLetterSpacing,
   SerializedLineHeight,
+  SerializedImageFilters,
   SerializedPaint,
   SerializedShaderProperty,
   SerializedShaderValue,
@@ -123,6 +124,13 @@ export interface SimplifiedPaint {
   opacity?: number;
   /** In-fill colour grading (exposure/contrast/…): export the composited render, not the original. */
   filtersApplied?: true;
+  /** Those adjustments, non-zero ones only, each −1…1. */
+  filters?: SerializedImageFilters;
+  /** IMAGE / VIDEO: which picture — Figma's hash of the bytes, as save_image_fills names its files. */
+  imageHash?: string;
+  videoHash?: string;
+  /** The paint's own blend mode when not NORMAL — separate from the node's `blendMode`. */
+  blendMode?: string;
   /** PATTERN tiling: the source tile node + how it repeats. See grounding.md "Pattern fills". */
   sourceNodeId?: string;
   tileType?: string;
@@ -161,6 +169,7 @@ export const simplifyPaint = (paint: SerializedPaint): SimplifiedPaint => {
     if ('cssTransform' in paint && paint.cssTransform !== undefined)
       out.cssTransform = paint.cssTransform;
     if ('filtersApplied' in paint && paint.filtersApplied === true) out.filtersApplied = true;
+    if ('filters' in paint && paint.filters !== undefined) out.filters = paint.filters;
   } else if (paint.type === 'PATTERN') {
     // The source tile + its repeat geometry — without it a pattern fill is just `{ type: 'PATTERN' }`
     // and the LLM can only flatten it to a colour. The serializer already omits no-op defaults.
@@ -182,6 +191,11 @@ export const simplifyPaint = (paint: SerializedPaint): SimplifiedPaint => {
   if (paint.type !== 'SOLID' && !('gradientStops' in paint) && paint.opacity !== 1) {
     out.opacity = paint.opacity;
   }
+  // The picture's identity rides outside the scaleMode branch: a paint with no scaleMode still
+  // shows one image and not another.
+  if ('imageHash' in paint && paint.imageHash !== undefined) out.imageHash = paint.imageHash;
+  if ('videoHash' in paint && paint.videoHash !== undefined) out.videoHash = paint.videoHash;
+  if (paint.blendMode !== undefined) out.blendMode = paint.blendMode;
   if (paint.visible === false) out.visible = false;
   return out;
 };

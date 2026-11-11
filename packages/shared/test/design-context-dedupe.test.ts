@@ -223,6 +223,51 @@ describe('dedupeStyles', () => {
     ]);
   });
 
+  it('keeps two pictures apart, and carries a paint’s blend mode and filter values', () => {
+    // Three layers stacked on one another, the classic trap: the two below share a picture, the
+    // one on top shows another under 20% black. Without the hash all three image paints are equal.
+    const image = (imageHash: string) => ({
+      type: 'IMAGE',
+      visible: true,
+      opacity: 1,
+      scaleMode: 'FILL',
+      imageHash,
+    });
+    const { nodes, globalVars } = dedupeStyles([
+      { id: 'a', name: 'a', type: 'RECTANGLE', fills: [image('old')] },
+      { id: 'b', name: 'b', type: 'RECTANGLE', fills: [image('old')] },
+      { id: 'c', name: 'c', type: 'RECTANGLE', fills: [image('new')] },
+      {
+        id: 'd',
+        name: 'd',
+        type: 'RECTANGLE',
+        fills: [
+          {
+            ...image('art'),
+            blendMode: 'LIGHTEN',
+            filtersApplied: true,
+            filters: { saturation: -1 },
+          },
+        ],
+      },
+    ] as never);
+    expect(nodes[0]!.fill).toBe(nodes[1]!.fill);
+    expect(nodes[2]!.fill).not.toBe(nodes[0]!.fill);
+    expect(globalVars.styles[nodes[2]!.fill!]).toEqual([
+      { type: 'IMAGE', scaleMode: 'FILL', imageHash: 'new' },
+    ]);
+    expect(globalVars.styles[nodes[3]!.fill!]).toEqual([
+      {
+        type: 'IMAGE',
+        scaleMode: 'FILL',
+        filtersApplied: true,
+        filters: { saturation: -1 },
+        imageHash: 'art',
+        blendMode: 'LIGHTEN',
+      },
+    ]);
+  });
+
   it('carries filtersApplied on an IMAGE fill (the export-the-composited-render signal)', () => {
     // The signal the LLM actually reads lives in globalVars (the simplified paint), not the raw
     // fill — so an in-fill colour grade must survive simplifyPaint, or codegen ships the original

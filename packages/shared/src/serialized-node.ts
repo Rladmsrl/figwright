@@ -109,10 +109,19 @@ export const SerializedShaderPropertySchema = z.object({
 });
 export type SerializedShaderProperty = z.infer<typeof SerializedShaderPropertySchema>;
 
+/**
+ * A paint's own blend mode: how this one fill or stroke composites with the paints under it in the
+ * same list and, through them, with what lies beneath the layer. It is separate from the node's
+ * `blendMode` — a layer left at pass-through can hold an image fill set to LIGHTEN, and only the
+ * paint says so. Omitted when NORMAL, the default and nearly every paint's value.
+ */
+const PaintBlendModeSchema = z.string().optional();
+
 const SolidPaintSchema = z.object({
   type: z.literal('SOLID'),
   visible: z.boolean(),
   opacity: z.number(),
+  blendMode: PaintBlendModeSchema,
   color: SerializedColorSchema,
   /** `{ color: variableId }` when the designer bound the paint's colour to a variable. */
   boundVariables: SerializedBindingsSchema.optional(),
@@ -136,6 +145,7 @@ const GradientPaintSchema = z.object({
   type: z.enum(['GRADIENT_LINEAR', 'GRADIENT_RADIAL', 'GRADIENT_ANGULAR', 'GRADIENT_DIAMOND']),
   visible: z.boolean(),
   opacity: z.number(),
+  blendMode: PaintBlendModeSchema,
   gradientStops: z.array(SerializedColorStopSchema),
   gradientTransform: z.array(z.array(z.number())),
   /**
@@ -151,6 +161,17 @@ const GradientPaintSchema = z.object({
   cssAngle: z.number().optional(),
 });
 
+const ImageFiltersSchema = z.object({
+  exposure: z.number().optional(),
+  contrast: z.number().optional(),
+  saturation: z.number().optional(),
+  temperature: z.number().optional(),
+  tint: z.number().optional(),
+  highlights: z.number().optional(),
+  shadows: z.number().optional(),
+});
+export type SerializedImageFilters = z.infer<typeof ImageFiltersSchema>;
+
 /**
  * IMAGE / VIDEO. scaleMode (the object-fit equivalent: FILL=cover, FIT=contain, CROP, TILE=repeat)
  * is carried so an exported image gets the right fit; the raster bytes themselves stay out of scope
@@ -160,6 +181,15 @@ const OtherPaintSchema = z.object({
   type: z.enum(['IMAGE', 'VIDEO']),
   visible: z.boolean(),
   opacity: z.number(),
+  blendMode: PaintBlendModeSchema,
+  /**
+   * Which image (or video) the paint shows: Figma's hash of the uploaded bytes, the same one
+   * save_image_fills names its file by. Without it two layers holding different pictures at the
+   * same scaleMode read as the same paint, and a picture swapped for another reads as no change.
+   * Omitted while the paint has no image yet.
+   */
+  imageHash: z.string().optional(),
+  videoHash: z.string().optional(),
   scaleMode: z.enum(['FILL', 'FIT', 'CROP', 'TILE']).optional(),
   /**
    * CROP only: the 2×3 matrix mapping the layer's 0–1 box into the image's 0–1 space — which part
@@ -179,6 +209,12 @@ const OtherPaintSchema = z.object({
    * colour grading is silently lost. Omitted when untouched.
    */
   filtersApplied: z.boolean().optional(),
+  /**
+   * The adjustments themselves, each −1…1 as Figma's sliders store them, non-zero ones only.
+   * Present exactly when `filtersApplied` is: that flag says the original bytes are not what the
+   * layer shows, this says by how much and in which direction.
+   */
+  filters: ImageFiltersSchema.optional(),
 });
 
 /**
@@ -193,6 +229,7 @@ const PatternPaintSchema = z.object({
   type: z.literal('PATTERN'),
   visible: z.boolean(),
   opacity: z.number(),
+  blendMode: PaintBlendModeSchema,
   sourceNodeId: z.string(),
   tileType: z.enum(['RECTANGULAR', 'HORIZONTAL_HEXAGONAL', 'VERTICAL_HEXAGONAL']),
   scalingFactor: z.number(),
@@ -210,6 +247,7 @@ const ShaderPaintSchema = z.object({
   type: z.literal('SHADER'),
   visible: z.boolean(),
   opacity: z.number(),
+  blendMode: PaintBlendModeSchema,
   /** The shader's id — the same one `listAvailableShaders` / `importShaderById` use. */
   shaderId: z.string(),
   /** Its property values, in the order Figma reports them; omitted when there are none. */

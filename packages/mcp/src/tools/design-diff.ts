@@ -42,9 +42,12 @@ export const DESIGN_DIFF_TOOL_NAME = 'design_diff';
  * as an empty shape. v9: a mirrored or turned node's flipped / boundingBox / cssTransform. v10: a
  * frame's grid style (styleIds.grid) — a v9 baseline is still diffed, against a capture without it.
  * v11: a local style id keeps its trailing comma and resolves to a name — a v9 or v10 baseline is
- * still diffed, against a capture in the shape those were saved in (withLegacyStyleIds).
+ * still diffed, against a capture in the shape those were saved in (withLegacyStyleIds). v12: a
+ * paint's own blendMode, an image or video paint's imageHash / videoHash, and an image's filters —
+ * a v9, v10 or v11 baseline is still diffed, against a capture with those left out
+ * (withoutPaintDetail), so it cannot yet see a picture swapped for another.
  */
-export const SNAPSHOT_FORMAT_VERSION = 11;
+export const SNAPSHOT_FORMAT_VERSION = 12;
 
 interface StyledNode {
   styleIds?: Record<string, string>;
@@ -65,6 +68,43 @@ const withoutGridStyleIds = (context: GetDesignContextResult): GetDesignContextR
   return copy;
 };
 
+const PAINT_TYPES: ReadonlySet<string> = new Set([
+  'SOLID',
+  'GRADIENT_LINEAR',
+  'GRADIENT_RADIAL',
+  'GRADIENT_ANGULAR',
+  'GRADIENT_DIAMOND',
+  'IMAGE',
+  'VIDEO',
+  'PATTERN',
+  'SHADER',
+]);
+const PAINT_DETAIL = ['blendMode', 'imageHash', 'videoHash', 'filters'] as const;
+
+/**
+ * A capture with every paint's blend mode, picture hash and filter values left out: the shape a
+ * baseline up to v11 was recorded in. Paints are found by their type wherever they sit (a node's
+ * fills and strokes, a style bundle in globalVars, an instance's overrides); a node's or an
+ * effect's own blendMode is not a paint's and stays.
+ */
+const withoutPaintDetail = (context: GetDesignContextResult): GetDesignContextResult => {
+  const copy = structuredClone(context);
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (typeof value !== 'object' || value === null) return;
+    const record = value as Record<string, unknown>;
+    if (typeof record['type'] === 'string' && PAINT_TYPES.has(record['type'])) {
+      for (const key of PAINT_DETAIL) delete record[key];
+    }
+    for (const child of Object.values(record)) visit(child);
+  };
+  visit(copy);
+  return copy;
+};
+
 /**
  * Older formats still diffed: each holds everything the current one does but a field it predates,
  * so a fresh capture is cut back to that shape before the compare. Re-baselining one instead would
@@ -73,8 +113,9 @@ const withoutGridStyleIds = (context: GetDesignContextResult): GetDesignContextR
 const READABLE_OLDER_FORMATS: Readonly<
   Record<number, (context: GetDesignContextResult) => GetDesignContextResult>
 > = {
-  9: context => withoutGridStyleIds(withLegacyStyleIds(context)),
-  10: withLegacyStyleIds,
+  9: context => withoutPaintDetail(withoutGridStyleIds(withLegacyStyleIds(context))),
+  10: context => withoutPaintDetail(withLegacyStyleIds(context)),
+  11: withoutPaintDetail,
 };
 const SNAPSHOT_SUBDIR = join('.figwright', 'snapshots');
 

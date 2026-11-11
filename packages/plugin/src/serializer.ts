@@ -61,6 +61,38 @@ const hasImageAdjustments = (filters: unknown): boolean =>
   filters !== null &&
   Object.values(filters).some(v => typeof v === 'number' && v !== 0);
 
+const IMAGE_ADJUSTMENTS = [
+  'exposure',
+  'contrast',
+  'saturation',
+  'temperature',
+  'tint',
+  'highlights',
+  'shadows',
+] as const;
+type ImageAdjustments = Partial<Record<(typeof IMAGE_ADJUSTMENTS)[number], number>>;
+
+/** An image fill's non-zero adjustments, or undefined when it has none. */
+const imageAdjustments = (filters: unknown): ImageAdjustments | undefined => {
+  if (typeof filters !== 'object' || filters === null) return undefined;
+  const out: ImageAdjustments = {};
+  for (const key of IMAGE_ADJUSTMENTS) {
+    const value = (filters as Record<string, unknown>)[key];
+    if (typeof value === 'number' && value !== 0) out[key] = round4(value);
+  }
+  return Object.keys(out).length === 0 ? undefined : out;
+};
+
+/**
+ * A paint's own blend mode, left out when NORMAL. It is not the node's: a layer at pass-through can
+ * hold a fill set to LIGHTEN or MULTIPLY, and read without it that fill composites as a plain one —
+ * an illustration meant to lighten its panel draws its dark surround over it instead.
+ */
+const paintBlendMode = (paint: Paint): { blendMode?: string } => {
+  const mode = (paint as { blendMode?: unknown }).blendMode;
+  return typeof mode === 'string' && mode !== 'NORMAL' ? { blendMode: mode } : {};
+};
+
 /**
  * A paint / effect / layout-grid / gradient-stop `boundVariables` record → `field` → variable id.
  * Figma keeps these bindings on the object itself (not in the owning node's `boundVariables`), and
@@ -137,6 +169,7 @@ export const serializePaint = (paint: Paint, ownerSize: PaintOwnerSize | null): 
       type: 'SOLID',
       visible,
       opacity,
+      ...paintBlendMode(paint),
       color: { r: paint.color.r, g: paint.color.g, b: paint.color.b },
       ...(bound === undefined ? {} : { boundVariables: bound }),
     };
@@ -159,6 +192,7 @@ export const serializePaint = (paint: Paint, ownerSize: PaintOwnerSize | null): 
       type: paint.type,
       visible,
       opacity,
+      ...paintBlendMode(paint),
       ...(cssAngle === undefined ? {} : { cssAngle }),
       gradientStops: stops.map(s => {
         const stop: SerializedColorStop = {
@@ -194,6 +228,7 @@ export const serializePaint = (paint: Paint, ownerSize: PaintOwnerSize | null): 
       type: 'PATTERN',
       visible,
       opacity,
+      ...paintBlendMode(paint),
       sourceNodeId: paint.sourceNodeId,
       tileType: paint.tileType,
       scalingFactor: paint.scalingFactor,
@@ -203,15 +238,28 @@ export const serializePaint = (paint: Paint, ownerSize: PaintOwnerSize | null): 
     };
   }
   if (paint.type === 'SHADER') {
-    return { type: 'SHADER', visible, opacity, ...serializeShader(paint) };
+    return {
+      type: 'SHADER',
+      visible,
+      opacity,
+      ...paintBlendMode(paint),
+      ...serializeShader(paint),
+    };
   }
   // IMAGE / VIDEO paints carry a scaleMode (FILL/FIT/CROP/TILE) — the object-fit equivalent, needed
   // so exported images get the right fit instead of being stretched. filtersApplied
   // flags in-fill colour grading, which the original bytes (save_image_fills) do NOT include — the
   // signal to export the composited render instead.
-  const media = paint as { scaleMode?: string; filters?: unknown; imageTransform?: Transform };
+  const media = paint as {
+    scaleMode?: string;
+    filters?: unknown;
+    imageTransform?: Transform;
+    imageHash?: unknown;
+    videoHash?: unknown;
+  };
   const scaleMode = media.scaleMode;
   const filtered = 'filters' in paint && hasImageAdjustments(media.filters);
+  const filters = filtered ? imageAdjustments(media.filters) : undefined;
   // A CROP says which part of the image the layer shows, and only its imageTransform says which:
   // without it a crop reads as a centred cover, measured 97–100% of pixels off. The matrix means
   // nothing in the other modes, so it stays out of them.
@@ -222,12 +270,19 @@ export const serializePaint = (paint: Paint, ownerSize: PaintOwnerSize | null): 
     type: paint.type,
     visible,
     opacity,
+    ...paintBlendMode(paint),
+    // Which picture this is. Two layers at the same scaleMode are otherwise the same paint whatever
+    // they show, so a covered layer can't be told from the one drawn over it, nor a swapped image
+    // from an untouched one.
+    ...(typeof media.imageHash === 'string' ? { imageHash: media.imageHash } : {}),
+    ...(typeof media.videoHash === 'string' ? { videoHash: media.videoHash } : {}),
     ...(scaleMode === undefined
       ? {}
       : { scaleMode: scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE' }),
     ...(crop === undefined ? {} : { imageTransform: crop.map(row => row.map(round6)) }),
     ...(cssTransform === undefined ? {} : { cssTransform }),
     ...(filtered ? { filtersApplied: true } : {}),
+    ...(filters === undefined ? {} : { filters }),
   };
 };
 

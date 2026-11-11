@@ -247,6 +247,60 @@ describe('handleDesignDiff', () => {
       ]);
     });
 
+    // Up to v11 a paint carried no blend mode, picture hash or filter values.
+    const withPaint = (paint: Record<string, unknown>, title = 'Hello'): GetDesignContextResult =>
+      ctx({
+        nodes: [
+          {
+            id: '1:1',
+            name: 'Card',
+            type: 'FRAME',
+            blendMode: 'MULTIPLY',
+            fill: 'fill_1',
+            children: [{ id: '1:2', name: 'Title', type: 'TEXT', characters: title }],
+          },
+        ],
+        globalVars: { styles: { fill_1: [{ type: 'IMAGE', scaleMode: 'FILL', ...paint }] } },
+      } as never);
+
+    it.each([9, 10, 11])(
+      'v%i is still diffed, and what a paint now says about itself is no change',
+      async version => {
+        await writeAt(version, withPaint({}));
+        currentCtx = withPaint({
+          imageHash: 'abc',
+          blendMode: 'LIGHTEN',
+          filtersApplied: true,
+          filters: { saturation: -1 },
+        });
+        // filtersApplied is as old as v2, so it is a real change; the three new fields are not.
+        const r = await diff();
+        expect(r.baselineCapturedAt).toBe(`v${version}`);
+        expect(changedFields(r)).toEqual([
+          ['fill', [{ type: 'IMAGE', scaleMode: 'FILL', filtersApplied: true }]],
+        ]);
+
+        currentCtx = withPaint({ imageHash: 'abc', blendMode: 'LIGHTEN' });
+        expect((await diff()).status).toBe('no-changes');
+      },
+    );
+
+    it('v11 keeps the node’s own blend mode, which it always held', async () => {
+      await writeAt(11, withPaint({}));
+      const current = withPaint({ imageHash: 'abc' });
+      (current.nodes[0] as { blendMode?: string }).blendMode = 'SCREEN';
+      currentCtx = current;
+      expect(changedFields(await diff())).toEqual([['blendMode', 'SCREEN']]);
+    });
+
+    it('a current baseline sees a picture swapped for another', async () => {
+      await writeAt(SNAPSHOT_FORMAT_VERSION, withPaint({ imageHash: 'abc' }));
+      currentCtx = withPaint({ imageHash: 'def' });
+      expect(changedFields(await diff())).toEqual([
+        ['fill', [{ type: 'IMAGE', scaleMode: 'FILL', imageHash: 'def' }]],
+      ]);
+    });
+
     it('is replaced by a full capture on update:true, which then sees a grid style change', async () => {
       await writeAt(9, ctx());
       currentCtx = withStyles({ grid: 'S:grid,' });
