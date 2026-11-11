@@ -18,6 +18,7 @@ import { handleSaveScreenshots } from '../../src/tools/save-screenshots.js';
 import { handleScanComponents } from '../../src/tools/scan-components.js';
 import { handleTokenMap } from '../../src/tools/token-map.js';
 import { handleUseFile } from '../../src/tools/use-file.js';
+import { handleVisualDiff } from '../../src/tools/visual-diff.js';
 import { checkBatchOps, WIRE_TOOL_SCHEMAS, wireToolSchema } from '../../src/tools/wire-schema.js';
 
 let root: string;
@@ -129,6 +130,12 @@ describe('server-built plugin payloads satisfy the schema the leader validates',
       label: 'design_diff',
       run: d => handleDesignDiff(d, { rootDir: root, nodeId: '1:1' }),
       expected: ['get_design_context'],
+    },
+    {
+      tool: 'visual_diff',
+      label: 'visual_diff',
+      run: d => handleVisualDiff(d, { nodeId: '1:1', imagePath: join(root, 'shot.png') }),
+      expected: ['get_screenshot'],
     },
     {
       tool: 'token_map',

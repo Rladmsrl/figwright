@@ -608,7 +608,7 @@ describe('serializeFlat', () => {
       }),
     );
     expect(out.blendMode).toBeUndefined();
-    expect(out.fills?.map(f => (f as { blendMode?: string }).blendMode)).toEqual([
+    expect((out.fills as readonly { blendMode?: string }[]).map(f => f.blendMode)).toEqual([
       'LIGHTEN',
       'MULTIPLY',
       'SCREEN',

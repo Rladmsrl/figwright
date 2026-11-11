@@ -20,6 +20,7 @@ import { createSandboxHandlers } from '../packages/plugin/src/handlers/registry.
 // filesystem (component_map / icon_map reuse get_design_context, token_map reuses get_variable_defs) and
 // never touch the sandbox. use_file claims one of the connected plugin sessions for this server
 // process — the claim is server state, and the file list it answers with reuses list_files.
+// visual_diff renders through get_screenshot and compares with a file on disk here.
 const SERVER_ONLY_TOOLS = new Set([
   'save_screenshots',
   'use_file',
@@ -29,6 +30,7 @@ const SERVER_ONLY_TOOLS = new Set([
   'token_map',
   'icon_map',
   'design_diff',
+  'visual_diff',
 ]);
 
 const serverNames = ALL_TOOL_SPECS.map(s => s.name);

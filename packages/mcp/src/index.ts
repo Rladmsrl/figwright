@@ -58,6 +58,7 @@ import { SCAN_TEXT_NODES_TOOL_NAME } from './tools/scan-text-nodes.js';
 import { SEARCH_NODES_TOOL_NAME } from './tools/search-nodes.js';
 import { handleTokenMap, TOKEN_MAP_TOOL_NAME } from './tools/token-map.js';
 import { handleUseFile, USE_FILE_TOOL_NAME } from './tools/use-file.js';
+import { handleVisualDiff, VISUAL_DIFF_TOOL_NAME } from './tools/visual-diff.js';
 import { checkBatchOps } from './tools/wire-schema.js';
 
 const SERVER_NAME = 'figwright';
@@ -205,6 +206,7 @@ const SPECIAL_HANDLERS: Record<string, ToolHandler> = {
   [TOKEN_MAP_TOOL_NAME]: async args => textResult(await handleTokenMap(dispatch, args)),
   [ICON_MAP_TOOL_NAME]: async args => textResult(await handleIconMap(await routedDispatch(), args)),
   [DESIGN_DIFF_TOOL_NAME]: async args => textResult(await handleDesignDiff(dispatch, args)),
+  [VISUAL_DIFF_TOOL_NAME]: async args => textResult(await handleVisualDiff(dispatch, args)),
   // The guarded public path: arms the plugin's node-count bail (budget: true) and applies the
   // payload-size net + below-full note. Internal dispatches (design_diff, component/icon map) call
   // the tool directly and stay raw.

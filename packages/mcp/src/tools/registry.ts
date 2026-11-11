@@ -141,6 +141,7 @@ import { updatePaintStyleTool } from './update-paint-style.js';
 import { updateTextStyleTool } from './update-text-style.js';
 import { updateVariableCollectionTool } from './update-variable-collection.js';
 import { useFileTool } from './use-file.js';
+import { visualDiffTool } from './visual-diff.js';
 
 /**
  * Every tool the MCP server registers, in ListTools order.
@@ -188,6 +189,7 @@ const DECLARED_TOOL_SPECS: readonly ToolSpec[] = [
   tokenMapTool,
   iconMapTool,
   designDiffTool,
+  visualDiffTool,
   // Writes
   setFillsTool,
   setTextTool,
